@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Risonanze Creative — Kandinsky × Playtron</title>
+  <!-- Audio: Web Audio API nativa, nessuna libreria esterna (funziona offline) -->
+  <style>
+    :root {
+      --bg-canvas: #F5F2EB;
+      --bg-panel: #EAE6DC;
+      --text-main: #121212;
+      --border-dark: #121212;
+      --accent-guide: #D81B60;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* Intestazione */
+    header {
+      background-color: var(--bg-panel);
+      border-bottom: 2px solid var(--border-dark);
+      padding: 10px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .header-titles h1 {
+      font-size: 1.15rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .header-titles p {
+      font-size: 0.82rem;
+      font-style: italic;
+      color: #555;
+      font-family: Georgia, serif;
+    }
+
+    /* Area Controlli MIDI in alto a destra */
+    .midi-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .midi-select {
+      background: #FFF;
+      border: 2px solid var(--border-dark);
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .status-badge {
+      font-size: 0.82rem;
+      font-weight: 700;
+      padding: 6px 14px;
+      border: 2px solid var(--border-dark);
+      border-radius: 20px;
+      background: #FFF9C4;
+      box-shadow: 2px 2px 0px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #D32F2F;
+      border: 1px solid #121212;
+    }
+
+    .status-dot.active {
+      background: #2E7D32;
+    }
+
+    /* Barra Modalità Didattica */
+    .chord-guide-bar {
+      background-color: #DFDAD0;
+      border-bottom: 1.5px solid var(--border-dark);
+      padding: 8px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      z-index: 10;
+      flex-wrap: wrap;
+    }
+
+    .chord-select {
+      background: #FFF;
+      border: 1.5px solid var(--border-dark);
+      padding: 4px 10px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .chord-desc {
+      font-style: italic;
+      color: #333;
+      max-width: 500px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Box Istruzioni Iniziali della Modalità Selezionata */
+    .mode-instruction-box {
+      background-color: #FFF9C4;
+      border-bottom: 2px solid var(--border-dark);
+      padding: 8px 20px;
+      text-align: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #121212;
+      display: none; /* Comparirà solo alla selezione di un accordo */
+      z-index: 9;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Area Canvas Principale */
+    main {
+      flex: 1;
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    /* Barra Inferiore */
+    footer {
+      background-color: var(--bg-panel);
+      border-top: 2px solid var(--border-dark);
+      padding: 10px 24px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      z-index: 10;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background-color: #FFF;
+      color: var(--text-main);
+      border: 2px solid var(--border-dark);
+      padding: 7px 16px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    button:hover:not(:disabled) {
+      background-color: var(--border-dark);
+      color: #FFF;
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      border-color: #888;
+    }
+
+    button.recording {
+      background-color: #E53935;
+      color: #FFF;
+      animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { opacity: 1; }
+      to { opacity: 0.7; }
+    }
+
+    /* Finestra Modale delle Istruzioni */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-box {
+      background: var(--bg-canvas);
+      border: 3px solid var(--border-dark);
+      width: 600px;
+      max-width: 90vw;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 6px 6px 0px rgba(0,0,0,0.3);
+      position: relative;
+    }
+
+    .modal-box h2 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 15px;
+      border-bottom: 2px solid var(--border-dark);
+      padding-bottom: 8px;
+    }
+
+    .modal-box p, .modal-box li {
+      font-size: 0.9rem;
+      line-height: 1.5;
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .modal-box ul {
+      margin-left: 20px;
+      margin-bottom: 15px;
+    }
+
+    .modal-close {
+      margin-top: 15px;
+      background: var(--border-dark);
+      color: #FFF;
+      width: 100%;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-titles">
+      <h1>Risonanze Creative — Kandinsky × Playtron</h1>
+      <p>«Il colore è il tasto. L'occhio è il martelletto. L'anima è il pianoforte dalle molte corde.»</p>
+    </div>
+    
+    <!-- CONTROLLI MIDI E TASTI CON TOOLTIP (ISTRUZIONI AL PASSAGGIO DEL MOUSE) -->
+    <div class="midi-controls">
+      <button id="btnInstructions" title="Clicca per aprire la guida completa all'utilizzo dell'app">📖 Istruzioni</button>
+      <button id="btnStart" title="Clicca per attivare l'audio del browser e abilitare i dispositivi MIDI">⚡ Avvia Audio</button>
+      <select id="midiDeviceSelect" class="midi-select" disabled title="Seleziona il tuo Playtron o altro controller MIDI da questa lista">
+        <option value="">-- Seleziona Dispositivo --</option>
+      </select>
+      <div class="status-badge" id="midiStatus" title="Stato della connessione MIDI in tempo reale">
+        <span class="status-dot" id="midiDot"></span>
+        <span id="midiText">In attesa</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- BARRA DIDATTICA -->
+  <div class="chord-guide-bar">
+    <span>💡 Modalità Didattica Accordi:</span>
+    <select id="chordSelector" class="chord-select" title="Scegli un accordo guidato per visualizzare le forme da suonare">
+      <option value="none">-- Esplorazione Libera --</option>
+      <option value="yellow_fanfare">Fanfara del Giallo (Pin 1, 3, 5)</option>
+      <option value="red_calm">Massa Stabile del Rosso (Pin 5, 6, 8)</option>
+      <option value="blue_cosmos">La Quiete del Cerchio Cosmico (Pin 9, 11, 13)</option>
+      <option value="polar_tension">Tensione Polare (Pin 1 vs Pin 13)</option>
+      <option value="bauhaus_triad">Accordo Totale Bauhaus (Pin 1, 5, 9, 13)</option>
+    </select>
+    <span class="chord-desc" id="chordDesc">Seleziona un'armonia per visualizzare le forme da toccare.</span>
+    <button id="btnPlayChord" disabled title="Riproduce automaticamente l'accordo selezionato">🎵 Ascolta Accordo</button>
+  </div>
+
+  <!-- BOX ISTRUZIONI DINAMICO DELLA MODALITÀ SELEZIONATA -->
+  <div class="mode-instruction-box" id="modeInstructionBox">
+    <span id="modeInstructionText">🎯 Indicazioni modalità...</span>
+  </div>
+
+  <main>
+    <canvas id="kandinskyCanvas" title="Clicca direttamente sulle forme geometriche per suonare"></canvas>
+  </main>
+
+  <footer>
+    <button id="btnRecord" disabled title="Inizia a registrare la tua improvvisazione sonoro-visiva">🔴 Registra Improvvisazione</button>
+    <button id="btnPlay" disabled title="Riascolta la composizione appena registrata">▶️ Riascolta Composizione</button>
+    <button id="btnExportJSON" disabled title="Scarica i dati musicali della registrazione in formato JSON">💾 Salva Dati (JSON)</button>
+    <button id="btnDownloadCard" disabled title="Scarica un'immagine PNG ad alta risoluzione con la partitura grafica">🖼️ Scarica Partitura PNG</button>
+    <button id="btnPrintCard" disabled title="Apri la finestra di stampa per la tua partitura kandinskyana">🖨️ Stampa Partitura</button>
+  </footer>
+
+  <!-- FINESTRA MODALE DELLE ISTRUZIONI -->
+  <div class="modal-overlay" id="instructionsModal">
+    <div class="modal-box">
+      <h2>📖 Guida all'Utilizzo</h2>
+      <p>Benvenuto in <strong>Risonanze Creative — Kandinsky × Playtron</strong>! Qui vale la regola <strong>«Prima fare, poi spiegare»</strong>: <em>Fai</em> (tocca le forme), <em>Ascolta</em> (suono e colori), <em>Spiega</em> (racconta cosa è successo). Passaggi:</p>
+      <ul>
+        <li><strong>1. Avvia l'Audio:</strong> Clicca sul pulsante <em>"⚡ Avvia Audio"</em> per sbloccare i sintetizzatori sonori nel browser.</li>
+        <li><strong>2. Collega il Playtron:</strong> Collega il tuo controller via USB. Selezionalo nel menu a tendina accanto al pulsante di avvio. Il pallino diventerà verde.</li>
+        <li><strong>3. Suona ed Esplora:</strong> Tocca i pin del Playtron, le forme sul quadro (anche con più dita) o i tasti 1-9, 0, Q-Y della tastiera per produrre suoni e animazioni sinestetiche.</li>
+        <li><strong>4. Modalità Didattica:</strong> Seleziona un accordo dal menu centrale per scoprire le armonie e seguire le guide luminose rosa sul quadro.</li>
+        <li><strong>5. Registra e Salva:</strong> Usa i pulsanti in basso per registrare le tue performance, salvarle in JSON o scaricare una partitura visiva in PNG!</li>
+      </ul>
+      <button class="modal-close" id="btnCloseModal">Ho capito, iniziamo!</button>
+    </div>
+  </div>
+
+  <script>
+    // --- 1. MAPPATURA CONTINUA DEI 16 PIN DEL PLAYTRON (C3 a D#4) ---
+    const PLAYTRON_PIN_MAPPING = {
+      1:  { midi: 48, note: 'C3',  name: 'Pin 1 - Triangolo Giallo',   synth: 'brass', color: '#FFEE00' },
+      2:  { midi: 49, note: 'C#3', name: 'Pin 2 - Triangolo Re3',     synth: 'brass', color: '#FFD700' },
+      3:  { midi: 50, note: 'D3',  name: 'Pin 3 - Retta Gialla',      synth: 'brass', color: '#FFAA00' },
+      4:  { midi: 51, note: 'D#3', name: 'Pin 4 - Diagonale',         synth: 'brass', color: '#FFF59D' },
+      5:  { midi: 52, note: 'E3',  name: 'Pin 5 - Quadrato Rosso',    synth: 'warm',  color: '#E53935' },
+      6:  { midi: 53, note: 'F3',  name: 'Pin 6 - Quadrato Carminio', synth: 'warm',  color: '#C2185B' },
+      7:  { midi: 54, note: 'F#3', name: 'Pin 7 - Croce Inclinata',   synth: 'warm',  color: '#880E4F' },
+      8:  { midi: 55, note: 'G3',  name: 'Pin 8 - Rettangolo Bruno',  synth: 'warm',  color: '#5D4037' },
+      9:  { midi: 56, note: 'G#3', name: 'Pin 9 - Cerchio Azzurro',   synth: 'deep',  color: '#4FC3F7' },
+      10: { midi: 57, note: 'A3',  name: 'Pin 10 - Cerchio Blu',      synth: 'deep',  color: '#1976D2' },
+      11: { midi: 58, note: 'A#3', name: 'Pin 11 - Cerchio Cosmico',  synth: 'deep',  color: '#0D47A1' },
+      12: { midi: 59, note: 'B3',  name: 'Pin 12 - Concentrici',      synth: 'deep',  color: '#1A237E' },
+      13: { midi: 60, note: 'C4',  name: 'Pin 13 - Biomorfo Verde',   synth: 'ether', color: '#81C784' },
+      14: { midi: 61, note: 'C#4', name: 'Pin 14 - Biomorfo Ocra',    synth: 'ether', color: '#D7CCC8' },
+      15: { midi: 62, note: 'D4',  name: 'Pin 15 - Curva Libera',     synth: 'ether', color: '#BA68C8' },
+      16: { midi: 63, note: 'D#4', name: 'Pin 16 - Sfondo Nero',      synth: 'deep',  color: '#212121' }
+    };
+
+    const MIDI_NOTE_TO_PIN = Object.entries(PLAYTRON_PIN_MAPPING).reduce((acc, [pin, data]) => {
+      acc[data.midi] = { pin: Number(pin), ...data };
+      return acc;
+    }, {});
+
+    // --- 2. MOTORE AUDIO SINESTETICO ---
+    class AudioEngine {
+      /* Web Audio nativa: voce per pin -> master (tetto 70%) -> riverbero + limitatore -> casse */
+      constructor() {
+        this.isReady = false;
+        this.activeVoices = new Map();
+        // Profili timbrici: forma d'onda, attacco, rilascio (s), filtro, battimento (cents)
+        this.profili = {
+          brass: { type: 'sawtooth', att: 0.02, rel: 0.4,  lp: 2600, det: 0 },
+          warm:  { type: 'triangle', att: 0.08, rel: 0.8,  lp: 3200, det: 0 },
+          deep:  { type: 'sine',     att: 0.15, rel: 2.2,  lp: 4000, det: 0 },
+          ether: { type: 'sine',     att: 0.25, rel: 1.8,  lp: 5000, det: 8 }
+        };
+      }
+
+      async init() {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC({ latencyHint: 'interactive' });
+        await this.ctx.resume();
+        const c = this.ctx;
+        this.master = c.createGain(); this.master.gain.value = 0.7;      // tetto di sicurezza
+        this.lim = c.createDynamicsCompressor();                         // limitatore: protegge le casse
+        this.lim.threshold.value = -18; this.lim.knee.value = 20; this.lim.ratio.value = 6;
+        this.lim.attack.value = 0.005; this.lim.release.value = 0.2;
+        // Riverbero sintetizzato (rumore con coda che svanisce)
+        const n = Math.floor(c.sampleRate * 2.5), buf = c.createBuffer(2, n, c.sampleRate);
+        for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3); }
+        this.rev = c.createConvolver(); this.rev.buffer = buf;
+        this.wet = c.createGain(); this.wet.gain.value = 0.3;
+        this.master.connect(this.lim); this.master.connect(this.rev); this.rev.connect(this.wet); this.wet.connect(this.lim);
+        this.lim.connect(c.destination);
+        this.isReady = true;
+      }
+
+      triggerNoteOn(midiNumber, velocity = 127) {
+        if (!this.isReady) return;
+        const target = MIDI_NOTE_TO_PIN[midiNumber];
+        if (!target) return;
+        if (this.activeVoices.has(midiNumber)) this.triggerNoteOff(midiNumber);
+        const c = this.ctx, p = this.profili[target.synth], t = c.currentTime;
+        const f = 440 * Math.pow(2, (midiNumber - 69) / 12);
+        const g = c.createGain(), lp = c.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = p.lp;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.28 * (velocity / 127), t + p.att);   // 0.28: più voci insieme senza saturare
+        lp.connect(g); g.connect(this.master);
+        const oscs = (p.det ? [-p.det, p.det] : [0]).map(d => {
+          const o = c.createOscillator(); o.type = p.type; o.frequency.value = f; o.detune.value = d;
+          o.connect(lp); o.start(t); return o;
+        });
+        this.activeVoices.set(midiNumber, { g, oscs, rel: p.rel });
+      }
+
+      triggerNoteOff(midiNumber) {
+        if (!this.isReady) return;
+        const v = this.activeVoices.get(midiNumber);
+        if (!v) return;
+        const t = this.ctx.currentTime;
+        v.g.gain.cancelScheduledValues(t);
+        v.g.gain.setValueAtTime(Math.max(v.g.gain.value, 0.0001), t);
+        v.g.gain.linearRampToValueAtTime(0.0001, t + v.rel);
+        v.oscs.forEach(o => o.stop(t + v.rel + 0.05));
+        this.activeVoices.delete(midiNumber);
+      }
+    }
+
+    // --- 3. MOTORE GRAFICO & CANVAS ---
+    class CanvasVisualizer {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.shapes = new Map();
+        this.ripples = [];
+        this.guidedNotes = new Set();
+
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.initShapes();
+        this.animate();
+      }
+
+      resize() {
+        this.width = this.canvas.width = this.canvas.parentElement.clientWidth;
+        this.height = this.canvas.height = this.canvas.parentElement.clientHeight;
+        if (this.shapes.size > 0) this.initShapes();
+      }
+
+      initShapes() {
+        const cx = this.width / 2;
+        const cy = this.height / 2;
+
+        const defs = [
+          { midi: 48, type: 'triangle',   x: cx - 260, y: cy - 100, size: 80, color: '#FFEE00', activeColor: '#FFFFFF', rotation: -0.2 },
+          { midi: 49, type: 'triangle',   x: cx - 200, y: cy - 120, size: 60, color: '#FFD700', activeColor: '#FFF9C4', rotation: 0.1 },
+          { midi: 50, type: 'line',       x: cx - 140, y: cy - 140, length: 220, angle: Math.PI / 2, color: '#FFAA00', activeColor: '#FFFFFF', width: 5 },
+          { midi: 51, type: 'line',       x: cx - 220, y: cy - 30,  length: 160, angle: Math.PI / 4, color: '#FFF59D', activeColor: '#FFFFFF', width: 4 },
+          { midi: 52, type: 'square',     x: cx - 80,  y: cy + 20,  size: 95, color: '#E53935', activeColor: '#FFCDD2', rotation: 0.05 },
+          { midi: 53, type: 'square',     x: cx + 10,  y: cy - 90,  size: 70, color: '#C2185B', activeColor: '#F8BBD0', rotation: -0.1 },
+          { midi: 54, type: 'cross',      x: cx - 110, y: cy + 130, size: 55, color: '#880E4F', activeColor: '#F48FB1', rotation: 0.35 },
+          { midi: 55, type: 'rect',       x: cx - 190, y: cy + 90,  w: 80, h: 40, color: '#5D4037', activeColor: '#D7CCC8', rotation: -0.15 },
+          { midi: 56, type: 'circle',     x: cx + 120, y: cy - 140, radius: 35, color: '#4FC3F7', activeColor: '#E1F5FE' },
+          { midi: 57, type: 'circle',     x: cx + 170, y: cy - 40,  radius: 50, color: '#1976D2', activeColor: '#BBDEFB' },
+          { midi: 58, type: 'circle',     x: cx + 240, y: cy + 40,  radius: 90, color: '#0D47A1', activeColor: '#90CAF9' },
+          { midi: 59, type: 'concentric', x: cx + 240, y: cy + 40,  radius: 120, color: '#1A237E', activeColor: '#C5CAE9' },
+          { midi: 60, type: 'blob',       x: cx + 70,  y: cy + 120, radius: 45, color: '#81C784', activeColor: '#E8F5E9' },
+          { midi: 61, type: 'blob',       x: cx - 20,  y: cy - 170, radius: 38, color: '#D7CCC8', activeColor: '#FFFFFF' },
+          { midi: 62, type: 'curve',      x: cx + 90,  y: cy - 20,  length: 150, color: '#BA68C8', activeColor: '#F3E5F5' },
+          { midi: 63, type: 'bottom',     x: cx, y: this.height - 20, w: this.width - 60, h: 16, color: '#212121', activeColor: '#616161' }
+        ];
+
+        this.shapes.clear();
+        defs.forEach(d => {
+          this.shapes.set(d.midi, { ...d, active: false, scale: 1.0, glow: 0 });
+        });
+      }
+
+      setGuidedNotes(notesArray) {
+        this.guidedNotes = new Set(notesArray);
+      }
+
+      onNoteOn(midiNumber) {
+        const s = this.shapes.get(midiNumber);
+        if (!s) return;
+        s.active = true;
+        s.scale = 1.18;
+        s.glow = 30;
+
+        this.ripples.push({
+          x: s.x,
+          y: s.y,
+          radius: s.radius || s.size || 50,
+          color: s.color,
+          alpha: 0.8
+        });
+      }
+
+      onNoteOff(midiNumber) {
+        const s = this.shapes.get(midiNumber);
+        if (s) s.active = false;
+      }
+
+      animate() {
+        requestAnimationFrame(() => this.animate());
+
+        this.ctx.fillStyle = '#F5F2EB';
+        this.ctx.fillRect(0, 0, this.width, this.height);
+
+        for (let i = this.ripples.length - 1; i >= 0; i--) {
+          const r = this.ripples[i];
+          this.ctx.save();
+          this.ctx.beginPath();
+          this.ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+          this.ctx.strokeStyle = r.color;
+          this.ctx.globalAlpha = r.alpha;
+          this.ctx.lineWidth = 3;
+          this.ctx.stroke();
+          this.ctx.restore();
+
+          r.radius += 2.2;
+          r.alpha -= 0.015;
+          if (r.alpha <= 0) this.ripples.splice(i, 1);
+        }
+
+        this.shapes.forEach(s => {
+          if (!s.active) {
+            s.scale += (1.0 - s.scale) * 0.1;
+            s.glow += (0 - s.glow) * 0.1;
+          }
+
+          const isGuided = this.guidedNotes.has(s.midi);
+
+          this.ctx.save();
+          this.ctx.translate(s.x, s.y);
+          if (s.rotation) this.ctx.rotate(s.rotation);
+          this.ctx.scale(s.scale, s.scale);
+
+          if (s.glow > 1) {
+            this.ctx.shadowColor = s.color;
+            this.ctx.shadowBlur = s.glow;
+          } else if (isGuided) {
+            this.ctx.shadowColor = '#D81B60';
+            this.ctx.shadowBlur = 18;
+          }
+
+          this.ctx.fillStyle = s.active ? s.activeColor : s.color;
+          this.ctx.strokeStyle = isGuided ? '#D81B60' : '#121212';
+          this.ctx.lineWidth = isGuided ? 3.5 : 2;
+
+          switch (s.type) {
+            case 'circle':
+              this.ctx.beginPath();
+              this.ctx.arc(0, 0, s.radius, 0, Math.PI * 2);
+              this.ctx.fill();
+              this.ctx.stroke();
+              break;
+            case 'concentric':
+              this.ctx.beginPath();
+              this.ctx.arc(0, 0, s.radius, 0, Math.PI * 2);
+              this.ctx.stroke();
+              break;
+            case 'triangle':
+              this.ctx.beginPath();
+              const h = s.size * (Math.sqrt(3) / 2);
+              this.ctx.moveTo(0, -h * (2 / 3));
+              this.ctx.lineTo(-s.size / 2, h / 3);
+              this.ctx.lineTo(s.size / 2, h / 3);
+              this.ctx.closePath();
+              this.ctx.fill();
+              this.ctx.stroke();
+              break;
+            case 'square':
+              this.ctx.beginPath();
+              this.ctx.rect(-s.size / 2, -s.size / 2, s.size, s.size);
+              this.ctx.fill();
+              this.ctx.stroke();
+              break;
+            case 'rect':
+            case 'bottom':
+              this.ctx.beginPath();
+              this.ctx.rect(-s.w / 2, -s.h / 2, s.w, s.h);
+              this.ctx.fill();
+              this.ctx.stroke();
+              break;
+            case 'line':
+              this.ctx.beginPath();
+              this.ctx.moveTo(0, -s.length / 2);
+              this.ctx.lineTo(0, s.length / 2);
+              this.ctx.lineWidth = s.width;
+              this.ctx.strokeStyle = s.active ? s.activeColor : (isGuided ? '#D81B60' : s.color);
+              this.ctx.stroke();
+              break;
+            case 'cross':
+              this.ctx.beginPath();
+              this.ctx.moveTo(-s.size / 2, 0);
+              this.ctx.lineTo(s.size / 2, 0);
+              this.ctx.moveTo(0, -s.size / 2);
+              this.ctx.lineTo(0, s.size / 2);
+              this.ctx.lineWidth = 5;
+              this.ctx.stroke();
+              break;
+            case 'blob':
+              this.ctx.beginPath();
+              this.ctx.ellipse(0, 0, s.radius * 1.25, s.radius * 0.75, Math.PI / 4, 0, Math.PI * 2);
+              this.ctx.fill();
+              this.ctx.stroke();
+              break;
+            case 'curve':
+              this.ctx.beginPath();
+              this.ctx.moveTo(-s.length / 2, 0);
+              this.ctx.bezierCurveTo(-30, -60, 30, 60, s.length / 2, 0);
+              this.ctx.lineWidth = 4;
+              this.ctx.strokeStyle = isGuided ? '#D81B60' : s.color;
+              this.ctx.stroke();
+              break;
+          }
+
+          this.ctx.restore();
+        });
+      }
+
+      findShapeAt(x, y) {
+        let best = null, bestR = Infinity;
+        for (let [midi, s] of this.shapes.entries()) {
+          const dx = x - s.x, dy = y - s.y, dist = Math.sqrt(dx * dx + dy * dy);
+          let ok = false, rad = 0;
+          if (s.type === 'bottom') { ok = Math.abs(dx) <= s.w / 2 && Math.abs(dy) <= s.h; rad = 1e6; }   // base: priorità minima
+          else if (s.type === 'concentric') { ok = Math.abs(dist - s.radius) <= 14; rad = 20; }          // solo sull'anello
+          else { rad = (s.radius || (s.size ? s.size / 2 : 40)) * 1.3; ok = dist <= rad; }
+          if (ok && rad < bestR) { best = midi; bestR = rad; }                                          // vince la forma più piccola
+        }
+        return best;
+      }
+    }
+
+    // --- 4. REGISTRATORE SINESTETICO ---
+    class SynestheticRecorder {
+      constructor(audio, visuals) {
+        this.audio = audio;
+        this.visuals = visuals;
+        this.isRecording = false;
+        this.isPlaying = false;
+        this.startTime = 0;
+        this.timeline = [];
+        this.timeouts = [];
+      }
+
+      start() {
+        this.timeline = [];
+        this.isRecording = true;
+        this.isPlaying = false;
+        this.clearTimeouts();
+        this.startTime = performance.now();
+      }
+
+      stop() {
+        this.isRecording = false;
+        return this.timeline;
+      }
+
+      record(type, note, vel = 127) {
+        if (!this.isRecording) return;
+        const time = performance.now() - this.startTime;
+        this.timeline.push({ time, type, note, vel });
+      }
+
+      play(onFinish) {
+        if (this.timeline.length === 0 || this.isPlaying) return;
+        this.isPlaying = true;
+        this.clearTimeouts();
+
+        this.timeline.forEach(e => {
+          const tid = setTimeout(() => {
+            if (!this.isPlaying) return;
+            if (e.type === 'on') {
+              this.audio.triggerNoteOn(e.note, e.vel);
+              this.visuals.onNoteOn(e.note);
+            } else {
+              this.audio.triggerNoteOff(e.note);
+              this.visuals.onNoteOff(e.note);
+            }
+          }, e.time);
+          this.timeouts.push(tid);
+        });
+
+        const totalTime = this.timeline[this.timeline.length - 1].time + 1200;
+        const endTid = setTimeout(() => {
+          this.isPlaying = false;
+          if (onFinish) onFinish();
+        }, totalTime);
+        this.timeouts.push(endTid);
+      }
+
+      clearTimeouts() {
+        this.timeouts.forEach(id => clearTimeout(id));
+        this.timeouts = [];
+      }
+
+      exportJSON() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.timeline, null, 2));
+        const a = document.createElement('a');
+        a.href = dataStr;
+        a.download = `kandinsky_composizione_${Date.now()}.json`;
+        a.click();
+      }
+    }
+
+    // --- 5. ESPORTATORE DI PARTITURA STAMPABILE ---
+    class ScoreCardExporter {
+      constructor(sourceCanvas, recorder) {
+        this.sourceCanvas = sourceCanvas;
+        this.recorder = recorder;
+      }
+
+      buildScoreCard() {
+        const w = 1920, h = 1080;
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+
+        ctx.fillStyle = '#F5F2EB';
+        ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = '#121212';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(40, 40, w - 80, h - 80);
+        ctx.lineWidth = 1;
+        ctx.strokeRect(48, 48, w - 96, h - 96);
+
+        ctx.fillStyle = '#121212';
+        ctx.font = 'bold 36px "Helvetica Neue", Arial, sans-serif';
+        ctx.fillText('RISONANZE CREATIVE: PARTITURA SINESTETICA', 80, 110);
+        ctx.font = 'italic 20px Georgia, serif';
+        ctx.fillStyle = '#424242';
+        ctx.fillText('«Il colore è il tasto. L\'occhio è il martelletto. L\'anima è il pianoforte dalle molte corde.» — V. Kandinskij', 80, 150);
+
+        const qX = 80, qY = 190, qW = 1100, qH = 750;
+        ctx.drawImage(this.sourceCanvas, qX, qY, qW, qH);
+        ctx.strokeStyle = '#121212';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(qX, qY, qW, qH);
+
+        const tX = 1230, tY = 190, tW = 610, tH = 750;
+        ctx.fillStyle = '#ECE8DF';
+        ctx.fillRect(tX, tY, tW, tH);
+        ctx.strokeRect(tX, tY, tW, tH);
+
+        ctx.fillStyle = '#121212';
+        ctx.font = 'bold 22px "Helvetica Neue", Arial, sans-serif';
+        ctx.fillText('PARTITURA TEMPORALE DEI TOCCHI', tX + 30, tY + 50);
+
+        const events = this.recorder.timeline;
+        if (events && events.length > 0) {
+          const totalDuration = events[events.length - 1].time || 1;
+          const noteOns = events.filter(e => e.type === 'on');
+
+          ctx.font = '14px Arial, sans-serif';
+          ctx.fillStyle = '#555';
+          ctx.fillText(`Eventi: ${noteOns.length} | Durata: ${(totalDuration / 1000).toFixed(1)}s`, tX + 30, tY + 80);
+
+          const pX = tX + 30, pY = tY + 120, pW = tW - 60, pH = 480;
+
+          ctx.strokeStyle = '#D0C9BD';
+          ctx.lineWidth = 1;
+          for (let i = 0; i <= 4; i++) {
+            const lx = pX + (pW / 4) * i;
+            ctx.beginPath(); ctx.moveTo(lx, pY); ctx.lineTo(lx, pY + pH); ctx.stroke();
+          }
+
+          noteOns.forEach(evt => {
+            const nx = pX + (evt.time / totalDuration) * pW;
+            const ny = (pY + pH) - ((evt.note - 48) / (63 - 48)) * pH;
+
+            let col = '#E53935';
+            if (evt.note >= 48 && evt.note <= 51) col = '#FFB300';
+            else if (evt.note >= 52 && evt.note <= 55) col = '#E53935';
+            else if (evt.note >= 56 && evt.note <= 59) col = '#1976D2';
+
+            ctx.beginPath();
+            ctx.arc(nx, ny, 6, 0, Math.PI * 2);
+            ctx.fillStyle = col;
+            ctx.fill();
+            ctx.strokeStyle = '#121212';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          });
+
+          const legY = tY + 630;
+          ctx.font = '13px Arial, sans-serif';
+          ctx.fillStyle = '#FFB300'; ctx.fillRect(tX + 30, legY, 14, 14);
+          ctx.fillStyle = '#121212'; ctx.fillText('Ottoni / Giallo', tX + 52, legY + 12);
+          ctx.fillStyle = '#E53935'; ctx.fillRect(tX + 180, legY, 14, 14);
+          ctx.fillStyle = '#121212'; ctx.fillText('Archi / Rosso', tX + 202, legY + 12);
+          ctx.fillStyle = '#1976D2'; ctx.fillRect(tX + 330, legY, 14, 14);
+          ctx.fillStyle = '#121212'; ctx.fillText('Organo / Blu', tX + 352, legY + 12);
+        }
+
+        const dateStr = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+        ctx.font = '15px Arial, sans-serif';
+        ctx.fillStyle = '#333';
+        ctx.fillText(`Registrazione interattiva | Data: ${dateStr}`, 80, 990);
+        ctx.fillText('Generato con Playtron × Kandinsky Synesthetic Audio Engine', tX, 990);
+
+        return c;
+      }
+
+      downloadPNG() {
+        const c = this.buildScoreCard();
+        const a = document.createElement('a');
+        a.download = `kandinsky_partitura_${Date.now()}.png`;
+        a.href = c.toDataURL('image/png');
+        a.click();
+      }
+
+      print() {
+        const c = this.buildScoreCard();
+        const url = c.toDataURL('image/png');
+        const pw = window.open('', '_blank');
+        pw.document.write(`
+          <html><head><title>Stampa Partitura</title>
+          <style>@page{size:landscape;margin:0;}body{margin:0;display:flex;align-items:center;justify-content:center;}img{width:100vw;height:auto;max-height:100vh;object-fit:contain;}</style>
+          </head><body onload="window.print();window.close();"><img src="${url}"/></body></html>
+        `);
+        pw.document.close();
+      }
+    }
+
+    // --- 6. HANDLER PLAYTRON & INIZIALIZZAZIONE ---
+    function handlePlaytronMessage(event, { onPinDown, onPinUp }) {
+      const [status, noteNumber, velocity] = event.data;
+      const command = status >> 4; 
+
+      const target = MIDI_NOTE_TO_PIN[noteNumber];
+      if (!target) return;
+
+      if (command === 9 && velocity > 0) {
+        onPinDown(target.pin, target);
+      } else if (command === 8 || (command === 9 && velocity === 0)) {
+        onPinUp(target.pin, target);
+      }
+    }
+
+    const audio = new AudioEngine();
+    const visuals = new CanvasVisualizer('kandinskyCanvas');
+    const recorder = new SynestheticRecorder(audio, visuals);
+    const exporter = new ScoreCardExporter(visuals.canvas, recorder);
+
+    const btnStart = document.getElementById('btnStart');
+    const btnInstructions = document.getElementById('btnInstructions');
+    const instructionsModal = document.getElementById('instructionsModal');
+    const btnCloseModal = document.getElementById('btnCloseModal');
+    const btnRecord = document.getElementById('btnRecord');
+    const btnPlay = document.getElementById('btnPlay');
+    const btnExportJSON = document.getElementById('btnExportJSON');
+    const btnDownloadCard = document.getElementById('btnDownloadCard');
+    const btnPrintCard = document.getElementById('btnPrintCard');
+    const btnPlayChord = document.getElementById('btnPlayChord');
+    const chordSelector = document.getElementById('chordSelector');
+    const chordDesc = document.getElementById('chordDesc');
+    const modeInstructionBox = document.getElementById('modeInstructionBox');
+    const modeInstructionText = document.getElementById('modeInstructionText');
+    const midiDot = document.getElementById('midiDot');
+    const midiText = document.getElementById('midiText');
+    const midiDeviceSelect = document.getElementById('midiDeviceSelect');
+
+    let midiAccessGlobal = null;
+    let selectedInputPortId = null;
+
+    // Gestione Finestra Istruzioni
+    btnInstructions.addEventListener('click', () => instructionsModal.classList.add('open'));
+    btnCloseModal.addEventListener('click', () => instructionsModal.classList.remove('open'));
+
+    btnStart.addEventListener('click', async () => {
+      await audio.init();
+      initWebMIDI();
+      btnStart.textContent = '✅ Audio Attivo';
+      btnStart.disabled = true;
+      btnRecord.disabled = false;
+      btnPlayChord.disabled = false;
+    });
+
+    function initWebMIDI() {
+      if (!navigator.requestMIDIAccess) {
+        midiText.textContent = "Web MIDI non supportato";
+        return;
+      }
+
+      navigator.requestMIDIAccess().then(access => {
+        midiAccessGlobal = access;
+        updateMIDISelectOptions();
+        access.onstatechange = () => updateMIDISelectOptions();
+      }).catch(() => {
+        midiText.textContent = "Accesso MIDI negato";
+        midiDot.classList.remove('active');
+      });
+    }
+
+    function updateMIDISelectOptions() {
+      if (!midiAccessGlobal) return;
+
+      midiDeviceSelect.innerHTML = '<option value="">-- Seleziona Dispositivo --</option>';
+      let count = 0;
+
+      for (let input of midiAccessGlobal.inputs.values()) {
+        const option = document.createElement('option');
+        option.value = input.id;
+        option.textContent = input.name;
+        midiDeviceSelect.appendChild(option);
+        count++;
+      }
+
+      if (count > 0) {
+        midiDeviceSelect.disabled = false;
+        if (selectedInputPortId && midiAccessGlobal.inputs.has(selectedInputPortId)) {
+          midiDeviceSelect.value = selectedInputPortId;
+        } else {
+          const firstInput = midiAccessGlobal.inputs.values().next().value;
+          if (firstInput) {
+            selectedInputPortId = firstInput.id;
+            midiDeviceSelect.value = selectedInputPortId;
+            connectToInput(firstInput);
+          }
+        }
+      } else {
+        midiDeviceSelect.disabled = true;
+        midiText.textContent = "Nessun dispositivo";
+        midiDot.classList.remove('active');
+      }
+    }
+
+    midiDeviceSelect.addEventListener('change', (e) => {
+      const inputId = e.target.value;
+      if (!inputId) {
+        midiText.textContent = "Nessun dispositivo";
+        midiDot.classList.remove('active');
+        return;
+      }
+
+      selectedInputPortId = inputId;
+      const targetInput = midiAccessGlobal.inputs.get(inputId);
+      if (targetInput) connectToInput(targetInput);
+    });
+
+    function connectToInput(inputPort) {
+      for (let port of midiAccessGlobal.inputs.values()) {
+        port.onmidimessage = null;
+      }
+
+      inputPort.onmidimessage = (e) => {
+        handlePlaytronMessage(e, {
+          onPinDown: (pin, target) => {
+            audio.triggerNoteOn(target.midi, 127);
+            visuals.onNoteOn(target.midi);
+            recorder.record('on', target.midi, 127);
+          },
+          onPinUp: (pin, target) => {
+            audio.triggerNoteOff(target.midi);
+            visuals.onNoteOff(target.midi);
+            recorder.record('off', target.midi, 0);
+          }
+        });
+      };
+
+      midiText.textContent = `Connesso: ${inputPort.name}`;
+      midiDot.classList.add('active');
+    }
+
+    // Interazione diretta: multitouch (un dito = una nota) e tastiera (accessibilità)
+    function pinDown(note) { audio.triggerNoteOn(note, 127); visuals.onNoteOn(note); recorder.record('on', note, 127); }
+    function pinUp(note)   { audio.triggerNoteOff(note); visuals.onNoteOff(note); recorder.record('off', note, 0); }
+
+    const dita = new Map();                       // pointerId -> nota
+    visuals.canvas.style.touchAction = 'none';
+    visuals.canvas.addEventListener('pointerdown', (e) => {
+      if (!audio.isReady) return;
+      const r = visuals.canvas.getBoundingClientRect();
+      const note = visuals.findShapeAt(e.clientX - r.left, e.clientY - r.top);
+      if (note) { dita.set(e.pointerId, note); pinDown(note); }
+    });
+    const rilascia = (e) => {
+      if (!dita.has(e.pointerId)) return;
+      const note = dita.get(e.pointerId); dita.delete(e.pointerId);
+      if (![...dita.values()].includes(note)) pinUp(note);
+    };
+    window.addEventListener('pointerup', rilascia);
+    window.addEventListener('pointercancel', rilascia);
+
+    // Tastiera: 1-9, 0, q, w, e, r, t, y = pin 1-16
+    const TASTI = '1234567890qwerty', tastiDown = new Set();
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat || !audio.isReady || /SELECT|TEXTAREA|INPUT/.test(e.target.tagName)) return;
+      const i = TASTI.indexOf(e.key.toLowerCase());
+      if (i >= 0 && !tastiDown.has(i)) { tastiDown.add(i); pinDown(48 + i); }
+    });
+    window.addEventListener('keyup', (e) => {
+      const i = TASTI.indexOf(e.key.toLowerCase());
+      if (i >= 0 && tastiDown.delete(i)) pinUp(48 + i);
+    });
+
+    // Accordi guidati con Istruzioni Iniziali per la Modalità
+    const GUIDED_CHORDS = {
+      none: { 
+        notes: [], 
+        desc: "Seleziona un'armonia per visualizzare le forme da toccare.",
+        instruction: ""
+      },
+      yellow_fanfare: {
+        notes: [48, 50, 52],
+        desc: "Squillo cromatico degli ottoni: Pin 1, 3 e 5.",
+        instruction: "🎯 MODALITÀ ATTIVA: Tocca i pin 1, 3 e 5 del Playtron (oppure le forme gialle sul quadro) per creare lo squillo degli ottoni!"
+      },
+      red_calm: {
+        notes: [52, 53, 55],
+        desc: "Massa stabile del rosso: Pin 5, 6 e 8.",
+        instruction: "🎯 MODALITÀ ATTIVA: Tocca i pin 5, 6 e 8 del Playtron (oppure i quadrati rossi sul quadro) per sentire l'armonia calda degli archi!"
+      },
+      blue_cosmos: {
+        notes: [56, 58, 60],
+        desc: "La quiete del cerchio cosmico: Pin 9, 11 e 13.",
+        instruction: "🎯 MODALITÀ ATTIVA: Tocca i pin 9, 11 e 13 del Playtron (oppure i cerchi blu sul quadro) per evocare il suono cosmico dell'organo!"
+      },
+      polar_tension: {
+        notes: [48, 60],
+        desc: "Tensione polare tra gli estremi della tastiera.",
+        instruction: "🎯 MODALITÀ ATTIVA: Tocca contemporaneamente il Pin 1 e il Pin 13 per percepire la massima tensione tra Giallo e Blu!"
+      },
+      bauhaus_triad: {
+        notes: [48, 52, 56, 60],
+        desc: "Accordo totale della sintesi formale del Bauhaus.",
+        instruction: "🎯 MODALITÀ ATTIVA: Tocca i pin 1, 5, 9 e 13 per ascoltare l'accordo universale che unisce tutte le forme della Bauhaus!"
+      }
+    };
+
+    chordSelector.addEventListener('change', (e) => {
+      const val = e.target.value;
+      const chordInfo = GUIDED_CHORDS[val] || GUIDED_CHORDS['none'];
+      
+      chordDesc.textContent = chordInfo.desc;
+      visuals.setGuidedNotes(chordInfo.notes);
+
+      // Gestione del box di istruzioni prima di iniziare la modalità
+      if (val !== 'none' && chordInfo.instruction) {
+        modeInstructionText.textContent = chordInfo.instruction;
+        modeInstructionBox.style.display = 'block';
+      } else {
+        modeInstructionBox.style.display = 'none';
+      }
+    });
+
+    let currentChordTimeouts = [];
+    btnPlayChord.addEventListener('click', () => {
+      const val = chordSelector.value;
+      const chordInfo = GUIDED_CHORDS[val];
+      if (!chordInfo || chordInfo.notes.length === 0) return;
+
+      currentChordTimeouts.forEach(t => clearTimeout(t));
+      currentChordTimeouts = [];
+
+      chordInfo.notes.forEach(midi => {
+        audio.triggerNoteOn(midi, 110);
+        visuals.onNoteOn(midi);
+      });
+
+      const offTid = setTimeout(() => {
+        chordInfo.notes.forEach(midi => {
+          audio.triggerNoteOff(midi);
+          visuals.onNoteOff(midi);
+        });
+      }, 1800);
+      currentChordTimeouts.push(offTid);
+    });
+
+    // Registratore & Playback
+    btnRecord.addEventListener('click', () => {
+      if (!recorder.isRecording) {
+        recorder.start();
+        btnRecord.textContent = '⏹️ Ferma Registrazione';
+        btnRecord.classList.add('recording');
+        btnPlay.disabled = true;
+        btnExportJSON.disabled = true;
+        btnDownloadCard.disabled = true;
+        btnPrintCard.disabled = true;
+      } else {
+        recorder.stop();
+        btnRecord.textContent = '🔴 Nuova Improvvisazione';
+        btnRecord.classList.remove('recording');
+
+        const hasEvents = recorder.timeline.length > 0;
+        btnPlay.disabled = !hasEvents;
+        btnExportJSON.disabled = !hasEvents;
+        btnDownloadCard.disabled = !hasEvents;
+        btnPrintCard.disabled = !hasEvents;
+      }
+    });
+
+    btnPlay.addEventListener('click', () => {
+      btnPlay.disabled = true;
+      btnPlay.textContent = '⏳ Riproduzione...';
+      recorder.play(() => {
+        btnPlay.disabled = false;
+        btnPlay.textContent = '▶️ Riascolta Composizione';
+      });
+    });
+
+    btnExportJSON.addEventListener('click', () => recorder.exportJSON());
+    btnDownloadCard.addEventListener('click', () => exporter.downloadPNG());
+    btnPrintCard.addEventListener('click', () => exporter.print());
+  </script>
+</body>
+</html>
